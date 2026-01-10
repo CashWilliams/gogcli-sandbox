@@ -1,0 +1,9 @@
+/bin/
+/dist/
+/gogcli-sandbox
+/gogcli-sandbox-init
+/gogcli-sandbox-client
+.gocache/
+.env
+*.sock
+*.log

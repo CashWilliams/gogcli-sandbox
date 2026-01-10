@@ -1,0 +1,19 @@
+[Unit]
+Description=gogcli sandbox
+After=network.target
+
+[Service]
+Type=simple
+User=gogd
+Group=gogcli-agent
+ExecStart=/usr/local/bin/gogcli-sandbox
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
