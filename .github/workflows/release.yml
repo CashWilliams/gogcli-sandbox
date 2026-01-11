@@ -63,3 +63,80 @@ jobs:
         with:
           files: |
             gogcli-sandbox_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.*
+
+  update-tap:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: CashWilliams/homebrew-tap
+          token: ${{ secrets.TAP_GH_TOKEN }}
+          path: tap
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GH_TOKEN }}
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          gh release download "$tag" -R "${{ github.repository }}" \
+            -p "gogcli-sandbox_${tag}_*.tar.gz"
+      - name: Update formula
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version="${tag#v}"
+
+          export VERSION="${version}"
+          export SHA_DARWIN_ARM64="$(shasum -a 256 gogcli-sandbox_${tag}_darwin_arm64.tar.gz | awk '{print $1}')"
+          export SHA_DARWIN_AMD64="$(shasum -a 256 gogcli-sandbox_${tag}_darwin_amd64.tar.gz | awk '{print $1}')"
+          export SHA_LINUX_ARM64="$(shasum -a 256 gogcli-sandbox_${tag}_linux_arm64.tar.gz | awk '{print $1}')"
+          export SHA_LINUX_AMD64="$(shasum -a 256 gogcli-sandbox_${tag}_linux_amd64.tar.gz | awk '{print $1}')"
+
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["VERSION"]
+          sha = {
+              "darwin_arm64": os.environ["SHA_DARWIN_ARM64"],
+              "darwin_amd64": os.environ["SHA_DARWIN_AMD64"],
+              "linux_arm64": os.environ["SHA_LINUX_ARM64"],
+              "linux_amd64": os.environ["SHA_LINUX_AMD64"],
+          }
+
+          path = pathlib.Path("tap/Formula/gogcli-sandbox.rb")
+          text = path.read_text()
+
+          text = re.sub(r'version\\s+"[^"]+"', f'version "{version}"', text)
+          text = re.sub(
+              r'(darwin_arm64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
+              r'\\1' + sha["darwin_arm64"] + r'\\2',
+              text,
+          )
+          text = re.sub(
+              r'(darwin_amd64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
+              r'\\1' + sha["darwin_amd64"] + r'\\2',
+              text,
+          )
+          text = re.sub(
+              r'(linux_arm64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
+              r'\\1' + sha["linux_arm64"] + r'\\2',
+              text,
+          )
+          text = re.sub(
+              r'(linux_amd64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
+              r'\\1' + sha["linux_amd64"] + r'\\2',
+              text,
+          )
+
+          path.write_text(text)
+          PY
+      - name: Commit and push
+        run: |
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/gogcli-sandbox.rb
+          git commit -m "gogcli-sandbox ${{ github.event.release.tag_name }}" || exit 0
+          git push
