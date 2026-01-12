@@ -1,9 +1,10 @@
 package types
 
 type Request struct {
-	ID     string                 `json:"id"`
-	Action string                 `json:"action"`
-	Params map[string]interface{} `json:"params"`
+	ID      string                 `json:"id"`
+	Action  string                 `json:"action"`
+	Account string                 `json:"account,omitempty"`
+	Params  map[string]interface{} `json:"params"`
 }
 
 type Response struct {

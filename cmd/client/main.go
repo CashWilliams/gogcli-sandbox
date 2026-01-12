@@ -64,6 +64,7 @@ var errHelp = errors.New("help requested")
 
 type config struct {
 	Socket  string
+	Account string
 	Timeout time.Duration
 	Pretty  bool
 	ID      string
@@ -75,9 +76,11 @@ func parseGlobal(args []string) (config, []string, error) {
 	if defaultSock == "" {
 		defaultSock = defaultSocket
 	}
+	defaultAccount := os.Getenv("GOGCLI_SANDBOX_ACCOUNT")
 	fs := flag.NewFlagSet("gogcli-sandbox", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&cfg.Socket, "socket", defaultSock, "unix socket path")
+	fs.StringVar(&cfg.Account, "account", defaultAccount, "gog account (optional)")
 	fs.DurationVar(&cfg.Timeout, "timeout", 15*time.Second, "request timeout")
 	fs.BoolVar(&cfg.Pretty, "pretty", false, "pretty-print JSON output")
 	fs.StringVar(&cfg.ID, "id", "", "request id (optional)")
@@ -385,7 +388,7 @@ func parseCalendarFreebusy(args []string) (string, map[string]interface{}, error
 }
 
 func doRequest(cfg config, action string, params map[string]interface{}) (*types.Response, []byte, error) {
-	reqPayload := &types.Request{ID: cfg.ID, Action: action, Params: params}
+	reqPayload := &types.Request{ID: cfg.ID, Action: action, Account: cfg.Account, Params: params}
 	body, err := json.Marshal(reqPayload)
 	if err != nil {
 		return nil, nil, err
@@ -486,6 +489,7 @@ func printUsage(section string) {
 	fmt.Println("")
 	fmt.Println("Global flags:")
 	fmt.Println("  --socket PATH     unix socket path (default: /run/gogcli-sandbox.sock)")
+	fmt.Println("  --account EMAIL   gog account email (optional; env: GOGCLI_SANDBOX_ACCOUNT)")
 	fmt.Println("  --timeout DUR     request timeout (default: 15s)")
 	fmt.Println("  --pretty          pretty-print JSON output")
 	fmt.Println("  --id ID           request id (optional)")

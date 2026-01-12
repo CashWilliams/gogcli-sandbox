@@ -21,7 +21,7 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	pol, err := policy.Load(cfg.PolicyPath)
+	policies, err := policy.LoadSet(cfg.PolicyPath)
 	if err != nil {
 		log.Fatalf("policy error: %v", err)
 	}
@@ -33,14 +33,19 @@ func main() {
 		logger = broker.NewTextLogger()
 	}
 
-	runner := &gog.GogRunner{Path: cfg.GogPath, Account: cfg.GogAccount, Timeout: cfg.Timeout}
-	pol.SetTimeZoneProvider(calendarTimeZoneProvider(runner))
+	runnerFactory := &gog.RunnerFactory{Path: cfg.GogPath, DefaultAccount: cfg.GogAccount, Timeout: cfg.Timeout}
+
+	for account, pol := range policies.Accounts {
+		runner := runnerFactory.RunnerFor(account)
+		pol.SetTimeZoneProvider(calendarTimeZoneProvider(runner))
+	}
 
 	b := &broker.Broker{
-		Policy:  pol,
-		Runner:  runner,
-		Logger:  logger,
-		Verbose: cfg.Verbose,
+		Policies:       policies,
+		RunnerProvider: runnerFactory,
+		DefaultAccount: cfg.GogAccount,
+		Logger:         logger,
+		Verbose:        cfg.Verbose,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

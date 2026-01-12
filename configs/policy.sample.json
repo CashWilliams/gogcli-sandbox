@@ -1,26 +1,31 @@
 {
-  "allowed_actions": [
-    "gmail.search",
-    "gmail.thread.list",
-    "gmail.thread.get",
-    "gmail.get",
-    "calendar.list",
-    "calendar.events",
-    "calendar.freebusy"
-  ],
-  "gmail": {
-    "allowed_labels": ["Label_1234567890", "INBOX"],
-    "allowed_senders": ["example.com"],
-    "allowed_send_recipients": ["approved@example.com"],
-    "max_days": 7,
-    "allow_body": false,
-    "allow_links": false,
-    "draft_only": true,
-    "allow_attachments": false
-  },
-  "calendar": {
-    "allowed_calendars": ["primary"],
-    "allow_details": false,
-    "max_days": 30
+  "default_account": "user@example.com",
+  "accounts": {
+    "user@example.com": {
+      "allowed_actions": [
+        "gmail.search",
+        "gmail.thread.list",
+        "gmail.thread.get",
+        "gmail.get",
+        "calendar.list",
+        "calendar.events",
+        "calendar.freebusy"
+      ],
+      "gmail": {
+        "allowed_labels": ["Label_1234567890", "INBOX"],
+        "allowed_senders": ["example.com"],
+        "allowed_send_recipients": ["approved@example.com"],
+        "max_days": 7,
+        "allow_body": false,
+        "allow_links": false,
+        "draft_only": true,
+        "allow_attachments": false
+      },
+      "calendar": {
+        "allowed_calendars": ["primary"],
+        "allow_details": false,
+        "max_days": 30
+      }
+    }
   }
 }

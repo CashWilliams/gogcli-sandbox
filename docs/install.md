@@ -39,32 +39,75 @@ Default XDG paths (for the service user, e.g. `gogd`):
 Create defaults:
 
 ```sh
-gogcli-sandbox-init
+gogcli-sandbox-init --account you@gmail.com
 ```
+
+`--account` is required because policies are enforced per account.
 
 Override defaults (example):
 
 ```sh
-gogcli-sandbox-init --label Label_123 --calendar primary --include-thread-get --max-calendar-days 14
+gogcli-sandbox-init --account you@gmail.com --label Label_123 --calendar primary --include-thread-get --max-calendar-days 14
+```
+
+Generate a multi-account policy with a default account:
+
+```sh
+gogcli-sandbox-init --account cashwilliams@gmail.com
 ```
 
 Enable send in draft-only mode (recommended):
 
 ```sh
-gogcli-sandbox-init --allow-send --draft-only
+gogcli-sandbox-init --account you@gmail.com --allow-send --draft-only
 ```
 
 Allow direct send only to specific recipients:
 
 ```sh
-gogcli-sandbox-init --allow-send --allow-send-recipient alice@example.com --allow-send-recipient bob@example.com --draft-only=false
+gogcli-sandbox-init --account you@gmail.com --allow-send --allow-send-recipient alice@example.com --allow-send-recipient bob@example.com --draft-only=false
 ```
 
 Preview policy without writing:
 
 ```sh
-gogcli-sandbox-init --stdout
+gogcli-sandbox-init --account you@gmail.com --stdout
 ```
+
+### Multi-account policy
+
+To enforce policy per account, use an `accounts` map in `policy.json` and set a default account:
+
+```json
+{
+  "default_account": "cashwilliams@gmail.com",
+  "accounts": {
+    "cashwilliams@gmail.com": {
+      "allowed_actions": ["gmail.search", "calendar.list", "calendar.events"],
+      "gmail": {
+        "allowed_labels": ["INBOX"],
+        "allowed_senders": [],
+        "allowed_send_recipients": [],
+        "max_days": 7,
+        "allow_body": false,
+        "allow_links": false,
+        "draft_only": true,
+        "allow_attachments": false
+      },
+      "calendar": {
+        "allowed_calendars": ["primary"],
+        "allow_details": false,
+        "max_days": 7
+      }
+    }
+  }
+}
+```
+
+When multiple accounts are configured, the client should pass `--account` (or set
+`GOGCLI_SANDBOX_ACCOUNT`). If omitted, the broker falls back to `default_account`,
+then `gog_account` from `config.json`, and finally auto-selects the only account
+if there is just one.
 
 ## Broker: run manually
 
@@ -174,6 +217,12 @@ Override socket path:
 
 ```sh
 gogcli-sandbox-client --socket /run/gogcli-sandbox.sock gmail.search --query "label:INBOX newer_than:7d"
+```
+
+Specify account:
+
+```sh
+gogcli-sandbox-client --account cashwilliams@gmail.com gmail.search --query "label:INBOX newer_than:7d"
 ```
 
 ## Getting label + calendar IDs

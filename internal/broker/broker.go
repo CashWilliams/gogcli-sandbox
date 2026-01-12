@@ -14,12 +14,14 @@ import (
 )
 
 type Broker struct {
-	Policy    *policy.Policy
-	Runner    gog.Runner
-	Logger    Logger
-	Verbose   bool
-	labelOnce sync.Once
-	labelErr  error
+	Policies       *policy.PolicySet
+	RunnerProvider gog.RunnerProvider
+	DefaultAccount string
+	Logger         Logger
+	Verbose        bool
+	labelMu        sync.Mutex
+	labelOnce      map[string]*sync.Once
+	labelErr       map[string]error
 }
 
 func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response {
@@ -33,6 +35,9 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 	if req == nil {
 		b.logError("request_nil", fields, start)
 		return &types.Response{Ok: false, Error: types.NewError("bad_request", "request is required", "")}
+	}
+	if req.Account != "" {
+		fields["account"] = req.Account
 	}
 	if b.Verbose {
 		fieldsVerbose := cloneFields(fields)
@@ -49,27 +54,39 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 		b.logError("missing_action", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("bad_request", "action is required", "")}
 	}
-	if !b.Policy.IsActionAllowed(req.Action) {
+
+	pol, account, err := b.resolvePolicy(req.Account)
+	if err != nil {
+		code := "forbidden"
+		if errors.Is(err, policy.ErrAccountRequired) {
+			code = "bad_request"
+		}
+		b.logDenied("account_denied", fields, start)
+		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError(code, err.Error(), "")}
+	}
+	fields["account"] = account
+
+	if !pol.IsActionAllowed(req.Action) {
 		b.logDenied("action_denied", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("forbidden", "action not allowed", "")}
 	}
 	if req.Action == "gmail.search" || req.Action == "gmail.thread.list" {
-		if b.Policy != nil && b.Policy.Gmail != nil && len(b.Policy.Gmail.AllowedLabels) > 0 {
-			if err := b.ensureLabelMap(ctx); err != nil {
+		if pol != nil && pol.Gmail != nil && len(pol.Gmail.AllowedLabels) > 0 {
+			if err := b.ensureLabelMap(ctx, account, pol); err != nil {
 				b.logError("label_map_error", fields, start)
 				return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("upstream_error", "failed to resolve label ids", "")}
 			}
 		}
 	}
 
-	params, warnings, err := b.Policy.ValidateAndRewrite(ctx, req.Action, req.Params)
+	params, warnings, err := pol.ValidateAndRewrite(ctx, req.Action, req.Params)
 	if err != nil {
 		b.logDenied("policy_denied", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("forbidden", err.Error(), "")}
 	}
 
 	runAction := req.Action
-	if req.Action == "gmail.send" && b.Policy != nil && b.Policy.DraftSendRequired(params) {
+	if req.Action == "gmail.send" && pol != nil && pol.DraftSendRequired(params) {
 		runAction = "gmail.drafts.create"
 		warnings = append(warnings, "action_rewritten:gmail.drafts.create")
 		if b.Verbose && b.Logger != nil {
@@ -77,13 +94,14 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 		}
 	}
 
-	data, err := b.Runner.Run(ctx, runAction, params)
+	runner := b.RunnerProvider.RunnerFor(account)
+	data, err := runner.Run(ctx, runAction, params)
 	if err != nil {
 		b.logError("gog_error", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("upstream_error", err.Error(), "")}
 	}
 
-	clean, redactionWarnings, err := redact.Redact(req.Action, data, b.Policy)
+	clean, redactionWarnings, err := redact.Redact(req.Action, data, pol)
 	if err != nil {
 		b.logError("redact_error", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("redaction_error", err.Error(), "")}
@@ -146,30 +164,36 @@ func paramKeys(params map[string]interface{}) []string {
 	return keys
 }
 
-func (b *Broker) ensureLabelMap(ctx context.Context) error {
-	if b == nil || b.Policy == nil || b.Runner == nil {
+func (b *Broker) ensureLabelMap(ctx context.Context, account string, pol *policy.Policy) error {
+	if b == nil || pol == nil || b.RunnerProvider == nil {
 		return nil
 	}
-	b.labelOnce.Do(func() {
-		data, err := b.Runner.Run(ctx, "gmail.labels.list", nil)
-		if err != nil {
-			b.labelErr = err
+	once, err := b.labelOnceFor(account)
+	if err != nil {
+		return err
+	}
+
+	once.Do(func() {
+		runner := b.RunnerProvider.RunnerFor(account)
+		data, runErr := runner.Run(ctx, "gmail.labels.list", nil)
+		if runErr != nil {
+			b.setLabelErr(account, runErr)
 			return
 		}
 		idToName := map[string]string{}
 		root, ok := data.(map[string]interface{})
 		if !ok {
-			b.labelErr = errors.New("invalid labels response")
+			b.setLabelErr(account, errors.New("invalid labels response"))
 			return
 		}
 		rawLabels, ok := root["labels"]
 		if !ok {
-			b.labelErr = errors.New("labels missing")
+			b.setLabelErr(account, errors.New("labels missing"))
 			return
 		}
 		items, ok := rawLabels.([]interface{})
 		if !ok {
-			b.labelErr = errors.New("labels invalid")
+			b.setLabelErr(account, errors.New("labels invalid"))
 			return
 		}
 		for _, item := range items {
@@ -184,10 +208,65 @@ func (b *Broker) ensureLabelMap(ctx context.Context) error {
 			}
 		}
 		if len(idToName) == 0 {
-			b.labelErr = errors.New("labels empty")
+			b.setLabelErr(account, errors.New("labels empty"))
 			return
 		}
-		b.Policy.SetLabelMap(idToName)
+		pol.SetLabelMap(idToName)
+		b.setLabelErr(account, nil)
 	})
-	return b.labelErr
+	return b.getLabelErr(account)
+}
+
+func (b *Broker) labelOnceFor(account string) (*sync.Once, error) {
+	b.labelMu.Lock()
+	defer b.labelMu.Unlock()
+	if b.labelOnce == nil {
+		b.labelOnce = map[string]*sync.Once{}
+	}
+	if b.labelErr == nil {
+		b.labelErr = map[string]error{}
+	}
+	key := account
+	if key == "" {
+		key = "_default"
+	}
+	once, ok := b.labelOnce[key]
+	if !ok {
+		once = &sync.Once{}
+		b.labelOnce[key] = once
+	}
+	return once, nil
+}
+
+func (b *Broker) setLabelErr(account string, err error) {
+	b.labelMu.Lock()
+	defer b.labelMu.Unlock()
+	if b.labelErr == nil {
+		b.labelErr = map[string]error{}
+	}
+	key := account
+	if key == "" {
+		key = "_default"
+	}
+	b.labelErr[key] = err
+}
+
+func (b *Broker) getLabelErr(account string) error {
+	b.labelMu.Lock()
+	defer b.labelMu.Unlock()
+	if b.labelErr == nil {
+		return nil
+	}
+	key := account
+	if key == "" {
+		key = "_default"
+	}
+	return b.labelErr[key]
+}
+
+func (b *Broker) resolvePolicy(account string) (*policy.Policy, string, error) {
+	if b == nil || b.Policies == nil {
+		return nil, "", errors.New("policy is required")
+	}
+	return b.Policies.Resolve(account, b.DefaultAccount)
 }

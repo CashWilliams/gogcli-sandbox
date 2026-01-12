@@ -2,11 +2,9 @@ package policy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -43,21 +41,6 @@ type CalendarPolicy struct {
 	AllowedCalendars []string `json:"allowed_calendars"`
 	AllowDetails     bool     `json:"allow_details"`
 	MaxDays          int      `json:"max_days"`
-}
-
-func Load(path string) (*Policy, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var p Policy
-	if err := json.Unmarshal(data, &p); err != nil {
-		return nil, err
-	}
-	if err := p.Validate(); err != nil {
-		return nil, err
-	}
-	return &p, nil
 }
 
 func (p *Policy) Validate() error {

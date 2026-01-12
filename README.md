@@ -16,6 +16,7 @@ The idea is to remove direct access to `gog` from the agent, and provide a layer
 - The broker refuses to start if the policy file is missing or invalid.
 - Denied actions return `ok: false` with a structured error.
 - All responses are redacted according to policy.
+- Policies are defined per account; the client can pass `--account`.
 - `gmail.send` can be forced into draft-only mode, with allowlisted recipients.
 - Gmail label filtering happens **after** the query to avoid false negatives.
 
