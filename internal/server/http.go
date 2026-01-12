@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"gogcli-sandbox/internal/broker"
@@ -16,19 +18,25 @@ import (
 const maxBodyBytes = 1 << 20
 
 func Serve(ctx context.Context, socketPath string, b *broker.Broker, logger broker.Logger) error {
-	if socketPath == "" {
-		return errors.New("socket path is required")
-	}
-	if err := removeSocketIfExists(socketPath); err != nil {
-		return err
-	}
-	listener, err := net.Listen("unix", socketPath)
+	listener, activated, err := systemdListener()
 	if err != nil {
 		return err
 	}
-	if err := os.Chmod(socketPath, 0o660); err != nil {
-		listener.Close()
-		return err
+	if !activated {
+		if socketPath == "" {
+			return errors.New("socket path is required")
+		}
+		if err := removeSocketIfExists(socketPath); err != nil {
+			return err
+		}
+		listener, err = net.Listen("unix", socketPath)
+		if err != nil {
+			return err
+		}
+		if err := os.Chmod(socketPath, 0o660); err != nil {
+			listener.Close()
+			return err
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -72,7 +80,11 @@ func Serve(ctx context.Context, socketPath string, b *broker.Broker, logger brok
 	}()
 
 	if logger != nil {
-		logger.Info("server_listening", map[string]any{"socket": socketPath})
+		fields := map[string]any{"socket": socketPath}
+		if activated {
+			fields["systemd_activated"] = true
+		}
+		logger.Info("server_listening", fields)
 	}
 	return srv.Serve(listener)
 }
@@ -110,4 +122,41 @@ func removeSocketIfExists(path string) error {
 		return errors.New("socket path exists and is not a unix socket")
 	}
 	return os.Remove(path)
+}
+
+func systemdListener() (net.Listener, bool, error) {
+	pidStr := os.Getenv("LISTEN_PID")
+	fdsStr := os.Getenv("LISTEN_FDS")
+	if pidStr == "" || fdsStr == "" {
+		return nil, false, nil
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid LISTEN_PID: %w", err)
+	}
+	if pid != os.Getpid() {
+		return nil, false, nil
+	}
+	fdCount, err := strconv.Atoi(fdsStr)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid LISTEN_FDS: %w", err)
+	}
+	if fdCount <= 0 {
+		return nil, false, nil
+	}
+
+	f := os.NewFile(uintptr(3), "systemd-listener")
+	if f == nil {
+		return nil, false, errors.New("systemd listener fd unavailable")
+	}
+	listener, err := net.FileListener(f)
+	_ = f.Close()
+	if err != nil {
+		return nil, true, err
+	}
+	if _, ok := listener.(*net.UnixListener); !ok {
+		listener.Close()
+		return nil, true, errors.New("systemd listener is not a unix socket")
+	}
+	return listener, true, nil
 }

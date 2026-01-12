@@ -101,7 +101,7 @@ Set in config:
 
 ```sh
 sudo groupadd gogcli-sandbox
-sudo usermod -aG gogcli-sandbox cash
+sudo usermod -aG gogcli-sandbox $USER 
 sudo chgrp gogcli-sandbox /run/gogcli-sandbox.sock
 sudo chmod 660 /run/gogcli-sandbox.sock
 ```
@@ -116,8 +116,8 @@ ExecStartPost=/bin/chmod 660 /run/gogcli-sandbox.sock
 
 ## Systemd (service + socket)
 
-This is the cleanest approach for production, but **requires socket activation support**
-in the broker. If you have not enabled socket activation, use the group-based approach above.
+This is the cleanest approach for production. The broker supports systemd socket activation
+by detecting `LISTEN_FDS`/`LISTEN_PID` and serving on the pre-opened socket.
 
 `/etc/systemd/system/gogcli-sandbox.socket`:
 
