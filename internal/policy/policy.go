@@ -106,6 +106,19 @@ func (p *Policy) LabelNameForID(id string) (string, bool) {
 	return name, ok
 }
 
+func (p *Policy) LabelIDForName(name string) (string, bool) {
+	if p == nil {
+		return "", false
+	}
+	p.labelMu.RLock()
+	defer p.labelMu.RUnlock()
+	if p.labelNameToID == nil {
+		return "", false
+	}
+	id, ok := p.labelNameToID[strings.ToLower(strings.TrimSpace(name))]
+	return id, ok
+}
+
 func (p *Policy) SetTimeZoneProvider(fn func(context.Context) (*time.Location, error)) {
 	if p == nil {
 		return
@@ -129,12 +142,20 @@ func (p *Policy) ValidateAndRewrite(ctx context.Context, action string, params m
 		return p.rewriteGmailQuery(params, warnings)
 	case "gmail.thread.get":
 		return p.rewriteGmailThreadGet(params, warnings)
+	case "gmail.thread.modify":
+		return p.rewriteGmailThreadModify(params, warnings)
 	case "gmail.get":
 		return p.rewriteGmailGet(params, warnings)
 	case "gmail.send":
 		return p.rewriteGmailSend(params, warnings)
 	case "gmail.drafts.create":
 		return p.rewriteGmailDraftCreate(params, warnings)
+	case "gmail.labels.list":
+		return params, warnings, nil
+	case "gmail.labels.get":
+		return p.rewriteGmailLabelsGet(params, warnings)
+	case "gmail.labels.modify":
+		return p.rewriteGmailLabelsModify(params, warnings)
 	case "calendar.list":
 		return params, warnings, nil
 	case "calendar.events":
@@ -195,6 +216,31 @@ func (p *Policy) rewriteGmailThreadGet(params map[string]interface{}, warnings [
 		return params, warnings, nil
 	}
 	return nil, nil, errors.New("params.id or params.thread_id is required")
+}
+
+func (p *Policy) rewriteGmailThreadModify(params map[string]interface{}, warnings []string) (map[string]interface{}, []string, error) {
+	threadID, ok := getStringAny(params, "thread_id", "id")
+	if !ok || strings.TrimSpace(threadID) == "" {
+		return nil, nil, errors.New("params.thread_id is required")
+	}
+
+	addLabels, _ := getStringSlice(params, "add")
+	removeLabels, _ := getStringSlice(params, "remove")
+	if len(addLabels) == 0 && len(removeLabels) == 0 {
+		return nil, nil, errors.New("params.add or params.remove is required")
+	}
+	if err := p.validateLabels(append(addLabels, removeLabels...)); err != nil {
+		return nil, nil, err
+	}
+
+	params["thread_id"] = strings.TrimSpace(threadID)
+	if len(addLabels) > 0 {
+		params["add"] = strings.Join(addLabels, ",")
+	}
+	if len(removeLabels) > 0 {
+		params["remove"] = strings.Join(removeLabels, ",")
+	}
+	return params, warnings, nil
 }
 
 func (p *Policy) rewriteGmailGet(params map[string]interface{}, warnings []string) (map[string]interface{}, []string, error) {
@@ -274,11 +320,103 @@ func (p *Policy) rewriteGmailDraftCreate(params map[string]interface{}, warnings
 	return params, warnings, nil
 }
 
+func (p *Policy) rewriteGmailLabelsGet(params map[string]interface{}, warnings []string) (map[string]interface{}, []string, error) {
+	label, ok := getStringAny(params, "label", "label_id", "id")
+	if !ok || strings.TrimSpace(label) == "" {
+		return nil, nil, errors.New("params.label is required")
+	}
+	label = strings.TrimSpace(label)
+	if err := p.validateLabels([]string{label}); err != nil {
+		return nil, nil, err
+	}
+	params["label"] = label
+	return params, warnings, nil
+}
+
+func (p *Policy) rewriteGmailLabelsModify(params map[string]interface{}, warnings []string) (map[string]interface{}, []string, error) {
+	threadIDs, ok := getStringSlice(params, "thread_ids")
+	if !ok {
+		if tid, ok := getStringAny(params, "thread_id", "id"); ok {
+			threadIDs = []string{tid}
+		}
+	}
+	if len(threadIDs) == 0 {
+		return nil, nil, errors.New("params.thread_ids is required")
+	}
+
+	addLabels, _ := getStringSlice(params, "add")
+	removeLabels, _ := getStringSlice(params, "remove")
+	if len(addLabels) == 0 && len(removeLabels) == 0 {
+		return nil, nil, errors.New("params.add or params.remove is required")
+	}
+	if err := p.validateLabels(append(addLabels, removeLabels...)); err != nil {
+		return nil, nil, err
+	}
+
+	params["thread_ids"] = threadIDs
+	if len(addLabels) > 0 {
+		params["add"] = strings.Join(addLabels, ",")
+	}
+	if len(removeLabels) > 0 {
+		params["remove"] = strings.Join(removeLabels, ",")
+	}
+	return params, warnings, nil
+}
+
 func (p *Policy) DraftSendRequired(params map[string]interface{}) bool {
 	if p == nil || p.Gmail == nil {
 		return false
 	}
 	return p.draftSendReason(params) != ""
+}
+
+func (p *Policy) validateLabels(labels []string) error {
+	if p == nil || p.Gmail == nil || len(p.Gmail.AllowedLabels) == 0 {
+		return nil
+	}
+	for _, label := range labels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		if !p.isLabelAllowed(label) {
+			return fmt.Errorf("label not allowed: %s", label)
+		}
+	}
+	return nil
+}
+
+func (p *Policy) isLabelAllowed(label string) bool {
+	if p == nil || p.Gmail == nil || len(p.Gmail.AllowedLabels) == 0 {
+		return true
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return false
+	}
+	labelLower := strings.ToLower(label)
+	allowedSet := map[string]struct{}{}
+	for _, allowed := range p.Gmail.AllowedLabels {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "" {
+			continue
+		}
+		allowedSet[strings.ToLower(allowed)] = struct{}{}
+	}
+	if _, ok := allowedSet[labelLower]; ok {
+		return true
+	}
+	if id, ok := p.LabelIDForName(label); ok {
+		if _, ok := allowedSet[strings.ToLower(id)]; ok {
+			return true
+		}
+	}
+	if name, ok := p.LabelNameForID(label); ok {
+		if _, ok := allowedSet[strings.ToLower(name)]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Policy) draftSendReason(params map[string]interface{}) string {

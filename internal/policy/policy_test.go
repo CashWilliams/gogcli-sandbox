@@ -107,3 +107,28 @@ func TestRewriteGmailSendAllowlistDraftsUnknownRecipients(t *testing.T) {
 		t.Fatalf("expected warnings")
 	}
 }
+
+func TestRewriteGmailLabelsGetAllowsMappedName(t *testing.T) {
+	p := &Policy{AllowedActions: []string{"gmail.labels.get"}, Gmail: &GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	p.SetLabelMap(map[string]string{"Label_123": "My Label"})
+	params := map[string]interface{}{"label": "My Label"}
+	_, _, err := p.ValidateAndRewrite(context.Background(), "gmail.labels.get", params)
+	if err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+}
+
+func TestRewriteGmailLabelsModifyRejectsDisallowed(t *testing.T) {
+	p := &Policy{AllowedActions: []string{"gmail.labels.modify"}, Gmail: &GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	params := map[string]interface{}{"thread_ids": []string{"t1"}, "add": "Other"}
+	_, _, err := p.ValidateAndRewrite(context.Background(), "gmail.labels.modify", params)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+}

@@ -96,10 +96,18 @@ func parseCommand(cmd string, args []string) (string, map[string]interface{}, er
 		return parseGmailSearch(args)
 	case "gmail.thread.get":
 		return parseGmailThreadGet(args)
+	case "gmail.thread.modify":
+		return parseGmailThreadModify(args)
 	case "gmail.get":
 		return parseGmailGet(args)
 	case "gmail.send":
 		return parseGmailSend(args)
+	case "gmail.labels.list":
+		return parseGmailLabelsList(args)
+	case "gmail.labels.get", "gmail.lables.get":
+		return parseGmailLabelsGet(args)
+	case "gmail.labels.modify":
+		return parseGmailLabelsModify(args)
 	case "policy.actions":
 		return parsePolicyActions(args)
 	case "calendar.list":
@@ -168,6 +176,34 @@ func parseGmailThreadGet(args []string) (string, map[string]interface{}, error) 
 		return "", nil, fmt.Errorf("--id is required")
 	}
 	return "gmail.thread.get", map[string]interface{}{"thread_id": *id}, nil
+}
+
+func parseGmailThreadModify(args []string) (string, map[string]interface{}, error) {
+	fs := flag.NewFlagSet("gmail.thread.modify", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	id := fs.String("id", "", "thread id (required)")
+	add := fs.String("add", "", "labels to add (comma-separated)")
+	remove := fs.String("remove", "", "labels to remove (comma-separated)")
+	if err := fs.Parse(args); err != nil {
+		return "", nil, err
+	}
+	if *id == "" && fs.NArg() > 0 {
+		*id = fs.Arg(0)
+	}
+	if strings.TrimSpace(*id) == "" {
+		return "", nil, fmt.Errorf("--id is required")
+	}
+	if strings.TrimSpace(*add) == "" && strings.TrimSpace(*remove) == "" {
+		return "", nil, fmt.Errorf("--add or --remove is required")
+	}
+	params := map[string]interface{}{"thread_id": *id}
+	if strings.TrimSpace(*add) != "" {
+		params["add"] = *add
+	}
+	if strings.TrimSpace(*remove) != "" {
+		params["remove"] = *remove
+	}
+	return "gmail.thread.modify", params, nil
 }
 
 func parseGmailGet(args []string) (string, map[string]interface{}, error) {
@@ -269,6 +305,59 @@ func parseGmailSend(args []string) (string, map[string]interface{}, error) {
 		params["attach"] = []string(attach)
 	}
 	return "gmail.send", params, nil
+}
+
+func parseGmailLabelsList(args []string) (string, map[string]interface{}, error) {
+	fs := flag.NewFlagSet("gmail.labels.list", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return "", nil, err
+	}
+	return "gmail.labels.list", map[string]interface{}{}, nil
+}
+
+func parseGmailLabelsGet(args []string) (string, map[string]interface{}, error) {
+	fs := flag.NewFlagSet("gmail.labels.get", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	label := fs.String("label", "", "label id or name (required)")
+	if err := fs.Parse(args); err != nil {
+		return "", nil, err
+	}
+	if *label == "" && fs.NArg() > 0 {
+		*label = fs.Arg(0)
+	}
+	if strings.TrimSpace(*label) == "" {
+		return "", nil, fmt.Errorf("--label is required")
+	}
+	return "gmail.labels.get", map[string]interface{}{"label": *label}, nil
+}
+
+func parseGmailLabelsModify(args []string) (string, map[string]interface{}, error) {
+	fs := flag.NewFlagSet("gmail.labels.modify", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var threadIDs stringList
+	fs.Var(&threadIDs, "thread-id", "thread id (repeatable)")
+	add := fs.String("add", "", "labels to add (comma-separated)")
+	remove := fs.String("remove", "", "labels to remove (comma-separated)")
+	if err := fs.Parse(args); err != nil {
+		return "", nil, err
+	}
+	ids := append([]string{}, threadIDs...)
+	ids = append(ids, fs.Args()...)
+	if len(ids) == 0 {
+		return "", nil, fmt.Errorf("--thread-id or positional thread ids are required")
+	}
+	if strings.TrimSpace(*add) == "" && strings.TrimSpace(*remove) == "" {
+		return "", nil, fmt.Errorf("--add or --remove is required")
+	}
+	params := map[string]interface{}{"thread_ids": []string(ids)}
+	if strings.TrimSpace(*add) != "" {
+		params["add"] = *add
+	}
+	if strings.TrimSpace(*remove) != "" {
+		params["remove"] = *remove
+	}
+	return "gmail.labels.modify", params, nil
 }
 
 func parseCalendarList(args []string) (string, map[string]interface{}, error) {
@@ -490,8 +579,12 @@ func printUsage(section string) {
 		fmt.Println("gmail commands:")
 		fmt.Println("  gmail.search        Search threads")
 		fmt.Println("  gmail.thread.get    Get a thread (metadata)")
+		fmt.Println("  gmail.thread.modify Modify labels on a thread")
 		fmt.Println("  gmail.get           Get a message (metadata)")
 		fmt.Println("  gmail.send          Send or draft an email (policy controlled)")
+		fmt.Println("  gmail.labels.list   List labels")
+		fmt.Println("  gmail.labels.get    Get label details")
+		fmt.Println("  gmail.labels.modify Modify labels on multiple threads")
 		return
 	case "calendar":
 		fmt.Println("calendar commands:")
@@ -518,11 +611,16 @@ func printUsage(section string) {
 	fmt.Println("Commands:")
 	fmt.Println("  gmail.search")
 	fmt.Println("  gmail.thread.get")
+	fmt.Println("  gmail.thread.modify")
 	fmt.Println("  gmail.get")
 	fmt.Println("  gmail.send")
+	fmt.Println("  gmail.labels.list")
+	fmt.Println("  gmail.labels.get")
+	fmt.Println("  gmail.labels.modify")
 	fmt.Println("  calendar.list")
 	fmt.Println("  calendar.events")
 	fmt.Println("  calendar.freebusy")
+	fmt.Println("  policy.actions")
 	fmt.Println("  policy.actions")
 	fmt.Println("")
 	fmt.Println("Help:")

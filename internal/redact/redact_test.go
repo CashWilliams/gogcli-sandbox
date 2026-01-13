@@ -141,3 +141,28 @@ func TestRedactFiltersCalendarList(t *testing.T) {
 		t.Fatalf("expected warnings")
 	}
 }
+
+func TestRedactFiltersLabelsList(t *testing.T) {
+	pol := &policy.Policy{AllowedActions: []string{"gmail.labels.list"}, Gmail: &policy.GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	if err := pol.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	input := map[string]interface{}{
+		"labels": []interface{}{
+			map[string]interface{}{"id": "Label_123", "name": "Allowed"},
+			map[string]interface{}{"id": "Label_999", "name": "Other"},
+		},
+	}
+	out, warnings, err := Redact("gmail.labels.list", input, pol)
+	if err != nil {
+		t.Fatalf("redact: %v", err)
+	}
+	result := out.(map[string]interface{})
+	labels := result["labels"].([]interface{})
+	if len(labels) != 1 {
+		t.Fatalf("expected 1 label, got %d", len(labels))
+	}
+	if len(warnings) == 0 {
+		t.Fatalf("expected warnings")
+	}
+}

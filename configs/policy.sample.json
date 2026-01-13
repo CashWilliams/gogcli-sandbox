@@ -6,7 +6,11 @@
         "gmail.search",
         "gmail.thread.list",
         "gmail.thread.get",
+        "gmail.thread.modify",
         "gmail.get",
+        "gmail.labels.list",
+        "gmail.labels.get",
+        "gmail.labels.modify",
         "calendar.list",
         "calendar.events",
         "calendar.freebusy"

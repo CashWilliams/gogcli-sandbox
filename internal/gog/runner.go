@@ -53,6 +53,14 @@ var actionSpecs = map[string]ActionSpec{
 		Command:    []string{"gmail", "thread", "get"},
 		Positional: []string{"thread_id"},
 	},
+	"gmail.thread.modify": {
+		Command:    []string{"gmail", "thread", "modify"},
+		Positional: []string{"thread_id"},
+		ParamFlags: map[string]string{
+			"add":    "--add",
+			"remove": "--remove",
+		},
+	},
 	"gmail.get": {
 		Command:    []string{"gmail", "get"},
 		Positional: []string{"message_id"},
@@ -101,6 +109,18 @@ var actionSpecs = map[string]ActionSpec{
 	},
 	"gmail.labels.list": {
 		Command: []string{"gmail", "labels", "list"},
+	},
+	"gmail.labels.get": {
+		Command:    []string{"gmail", "labels", "get"},
+		Positional: []string{"label"},
+	},
+	"gmail.labels.modify": {
+		Command:    []string{"gmail", "labels", "modify"},
+		Positional: []string{"thread_ids"},
+		ParamFlags: map[string]string{
+			"add":    "--add",
+			"remove": "--remove",
+		},
 	},
 	"calendar.list": {
 		Command: []string{"calendar", "calendars"},
@@ -184,11 +204,11 @@ func buildArgs(spec ActionSpec, params map[string]interface{}) ([]string, error)
 		if !ok {
 			return nil, fmt.Errorf("missing required param: %s", key)
 		}
-		arg, err := normalizePositional(key, val)
+		argVals, err := normalizePositional(key, val)
 		if err != nil {
 			return nil, fmt.Errorf("param %s: %w", key, err)
 		}
-		args = append(args, arg)
+		args = append(args, argVals...)
 		seen[key] = struct{}{}
 	}
 
@@ -248,26 +268,19 @@ func buildArgs(spec ActionSpec, params map[string]interface{}) ([]string, error)
 	return args, nil
 }
 
-func normalizePositional(key string, val interface{}) (string, error) {
+func normalizePositional(key string, val interface{}) ([]string, error) {
+	vals, err := normalizeValue(val)
+	if err != nil {
+		return nil, err
+	}
+	if len(vals) == 0 {
+		return nil, errors.New("empty value")
+	}
 	switch key {
 	case "calendar_ids":
-		vals, err := normalizeValue(val)
-		if err != nil {
-			return "", err
-		}
-		if len(vals) == 0 {
-			return "", errors.New("empty calendar_ids")
-		}
-		return strings.Join(vals, ","), nil
+		return []string{strings.Join(vals, ",")}, nil
 	default:
-		vals, err := normalizeValue(val)
-		if err != nil {
-			return "", err
-		}
-		if len(vals) == 0 {
-			return "", errors.New("empty value")
-		}
-		return vals[0], nil
+		return vals, nil
 	}
 }
 

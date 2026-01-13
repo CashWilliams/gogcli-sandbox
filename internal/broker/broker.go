@@ -54,6 +54,10 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 		b.logError("missing_action", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("bad_request", "action is required", "")}
 	}
+	if req.Action == "gmail.lables.get" {
+		req.Action = "gmail.labels.get"
+		fields["action"] = req.Action
+	}
 
 	pol, account, err := b.resolvePolicy(req.Account)
 	if err != nil {
@@ -70,7 +74,7 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 		b.logDenied("action_denied", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("forbidden", "action not allowed", "")}
 	}
-	if req.Action == "gmail.search" || req.Action == "gmail.thread.list" {
+	if req.Action == "gmail.search" || req.Action == "gmail.thread.list" || req.Action == "gmail.labels.get" || req.Action == "gmail.labels.modify" || req.Action == "gmail.thread.modify" {
 		if pol != nil && pol.Gmail != nil && len(pol.Gmail.AllowedLabels) > 0 {
 			if err := b.ensureLabelMap(ctx, account, pol); err != nil {
 				b.logError("label_map_error", fields, start)

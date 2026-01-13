@@ -43,7 +43,7 @@ var calendarDetailKeys = map[string]struct{}{
 func Redact(action string, data any, pol *policy.Policy) (any, []string, error) {
 	warnings := []string{}
 	switch action {
-	case "gmail.search", "gmail.thread.list", "gmail.thread.get", "gmail.get", "gmail.send", "gmail.drafts.create":
+	case "gmail.search", "gmail.thread.list", "gmail.thread.get", "gmail.thread.modify", "gmail.get", "gmail.send", "gmail.drafts.create", "gmail.labels.list", "gmail.labels.get", "gmail.labels.modify":
 		if pol.Gmail == nil {
 			return nil, nil, errors.New("gmail policy missing")
 		}
@@ -56,6 +56,13 @@ func Redact(action string, data any, pol *policy.Policy) (any, []string, error) 
 			switch action {
 			case "gmail.search", "gmail.thread.list":
 				filtered, fw, err := filterSearchResults(clean, pol.Gmail.AllowedLabels, pol)
+				if err != nil {
+					return nil, nil, err
+				}
+				warnings = append(warnings, fw...)
+				return filtered, warnings, nil
+			case "gmail.labels.list":
+				filtered, fw, err := filterLabelsList(clean, pol.Gmail.AllowedLabels)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -249,6 +256,56 @@ func filterSearchResults(data any, allowed []string, pol *policy.Policy) (any, [
 	}
 	if len(filtered) != len(items) {
 		root["threads"] = filtered
+		return root, []string{"filtered:labels"}, nil
+	}
+	return root, nil, nil
+}
+
+func filterLabelsList(data any, allowed []string) (any, []string, error) {
+	if len(allowed) == 0 {
+		return data, nil, nil
+	}
+	root, ok := data.(map[string]interface{})
+	if !ok {
+		return data, nil, nil
+	}
+	rawLabels, ok := root["labels"]
+	if !ok {
+		return data, nil, nil
+	}
+	items, ok := rawLabels.([]interface{})
+	if !ok {
+		return data, nil, nil
+	}
+
+	set := map[string]struct{}{}
+	for _, label := range allowed {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		set[strings.ToLower(label)] = struct{}{}
+	}
+
+	filtered := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id, _ := m["id"].(string)
+		name, _ := m["name"].(string)
+		if _, ok := set[strings.ToLower(id)]; ok {
+			filtered = append(filtered, item)
+			continue
+		}
+		if _, ok := set[strings.ToLower(name)]; ok {
+			filtered = append(filtered, item)
+			continue
+		}
+	}
+	if len(filtered) != len(items) {
+		root["labels"] = filtered
 		return root, []string{"filtered:labels"}, nil
 	}
 	return root, nil, nil
