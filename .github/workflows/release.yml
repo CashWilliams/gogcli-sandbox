@@ -95,7 +95,6 @@ jobs:
           python - <<'PY'
           import os
           import pathlib
-          import re
 
           version = os.environ["VERSION"]
           sha = {
@@ -106,32 +105,45 @@ jobs:
           }
 
           path = pathlib.Path("tap/Formula/gogcli-sandbox.rb")
-          text = path.read_text()
+          lines = path.read_text().splitlines()
+          out = []
+          version_updated = False
+          sha_updated = set()
+          pending = None
 
-          text = re.sub(r'version\\s+"[^"]+"', f'version "{version}"', text)
-          text = re.sub(
-              r'(darwin_arm64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
-              r'\\1' + sha["darwin_arm64"] + r'\\2',
-              text,
-          )
-          text = re.sub(
-              r'(darwin_amd64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
-              r'\\1' + sha["darwin_amd64"] + r'\\2',
-              text,
-          )
-          text = re.sub(
-              r'(linux_arm64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
-              r'\\1' + sha["linux_arm64"] + r'\\2',
-              text,
-          )
-          text = re.sub(
-              r'(linux_amd64\\.tar\\.gz"\\s*\\n\\s*sha256\\s+")[0-9a-f]+(")',
-              r'\\1' + sha["linux_amd64"] + r'\\2',
-              text,
-          )
+          for line in lines:
+              stripped = line.strip()
+              if stripped.startswith("version "):
+                  prefix = line.split("version", 1)[0]
+                  line = f'{prefix}version "{version}"'
+                  version_updated = True
+              if "darwin_arm64.tar.gz" in line:
+                  pending = "darwin_arm64"
+              elif "darwin_amd64.tar.gz" in line:
+                  pending = "darwin_amd64"
+              elif "linux_arm64.tar.gz" in line:
+                  pending = "linux_arm64"
+              elif "linux_amd64.tar.gz" in line:
+                  pending = "linux_amd64"
+              elif stripped.startswith("sha256 ") and pending:
+                  prefix = line.split("sha256", 1)[0]
+                  line = f'{prefix}sha256 "{sha[pending]}"'
+                  sha_updated.add(pending)
+                  pending = None
+              out.append(line)
 
-          path.write_text(text)
+          if not version_updated:
+              raise SystemExit("failed to update version in formula")
+          missing = {k for k in sha.keys() if k not in sha_updated}
+          if missing:
+              raise SystemExit(f"failed to update sha256 for: {', '.join(sorted(missing))}")
+
+          path.write_text("\n".join(out) + "\n")
           PY
+      - name: Show tap diff
+        run: |
+          git -C tap status --porcelain
+          git -C tap --no-pager diff -- Formula/gogcli-sandbox.rb
       - name: Commit and push
         run: |
           cd tap
