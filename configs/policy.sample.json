@@ -16,7 +16,9 @@
         "calendar.freebusy"
       ],
       "gmail": {
-        "allowed_labels": ["Label_1234567890", "INBOX"],
+        "allowed_read_labels": ["Label_1234567890", "INBOX"],
+        "allowed_add_labels": ["Label_1234567890"],
+        "allowed_remove_labels": ["INBOX"],
         "allowed_senders": ["example.com"],
         "allowed_send_recipients": ["approved@example.com"],
         "max_days": 7,

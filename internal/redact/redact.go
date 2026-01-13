@@ -52,27 +52,33 @@ func Redact(action string, data any, pol *policy.Policy) (any, []string, error) 
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(pol.Gmail.AllowedLabels) > 0 {
-			switch action {
-			case "gmail.search", "gmail.thread.list":
-				filtered, fw, err := filterSearchResults(clean, pol.Gmail.AllowedLabels, pol)
+		readAllowed := pol.Gmail.AllowedReadLabels
+		labelUnion := allowedLabelUnion(pol.Gmail)
+		switch action {
+		case "gmail.search", "gmail.thread.list":
+			if len(readAllowed) > 0 {
+				filtered, fw, err := filterSearchResults(clean, readAllowed, pol)
 				if err != nil {
 					return nil, nil, err
 				}
 				warnings = append(warnings, fw...)
 				return filtered, warnings, nil
-			case "gmail.labels.list":
-				filtered, fw, err := filterLabelsList(clean, pol.Gmail.AllowedLabels)
+			}
+		case "gmail.labels.list":
+			if len(labelUnion) > 0 {
+				filtered, fw, err := filterLabelsList(clean, labelUnion)
 				if err != nil {
 					return nil, nil, err
 				}
 				warnings = append(warnings, fw...)
 				return filtered, warnings, nil
-			case "gmail.send", "gmail.drafts.create":
-				// Sends/drafts may not include label info; do not enforce label checks.
-				return clean, warnings, nil
-			default:
-				if found, ok := hasAllowedLabelIDs(clean, pol.Gmail.AllowedLabels); found && !ok {
+			}
+		case "gmail.send", "gmail.drafts.create":
+			// Sends/drafts may not include label info; do not enforce label checks.
+			return clean, warnings, nil
+		default:
+			if len(readAllowed) > 0 {
+				if found, ok := hasAllowedLabelIDs(clean, readAllowed); found && !ok {
 					return nil, nil, errors.New("response does not include allowed labels")
 				}
 			}
@@ -309,6 +315,31 @@ func filterLabelsList(data any, allowed []string) (any, []string, error) {
 		return root, []string{"filtered:labels"}, nil
 	}
 	return root, nil, nil
+}
+
+func allowedLabelUnion(gmail *policy.GmailPolicy) []string {
+	if gmail == nil {
+		return nil
+	}
+	set := map[string]struct{}{}
+	add := func(vals []string) {
+		for _, v := range vals {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			set[strings.ToLower(v)] = struct{}{}
+		}
+	}
+	add(gmail.AllowedReadLabels)
+	add(gmail.AllowedAddLabels)
+	add(gmail.AllowedRemoveLabels)
+
+	out := make([]string, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	return out
 }
 
 func allowedLabelForItem(item any, allowed []string, pol *policy.Policy) bool {

@@ -27,7 +27,9 @@ type Policy struct {
 }
 
 type GmailPolicy struct {
-	AllowedLabels         []string `json:"allowed_labels"`
+	AllowedReadLabels     []string `json:"allowed_read_labels"`
+	AllowedAddLabels      []string `json:"allowed_add_labels"`
+	AllowedRemoveLabels   []string `json:"allowed_remove_labels"`
 	AllowedSenders        []string `json:"allowed_senders"`
 	AllowedSendRecipients []string `json:"allowed_send_recipients"`
 	MaxDays               int      `json:"max_days"`
@@ -229,7 +231,10 @@ func (p *Policy) rewriteGmailThreadModify(params map[string]interface{}, warning
 	if len(addLabels) == 0 && len(removeLabels) == 0 {
 		return nil, nil, errors.New("params.add or params.remove is required")
 	}
-	if err := p.validateLabels(append(addLabels, removeLabels...)); err != nil {
+	if err := p.validateLabels(addLabels, p.Gmail.AllowedAddLabels, "add", false); err != nil {
+		return nil, nil, err
+	}
+	if err := p.validateLabels(removeLabels, p.Gmail.AllowedRemoveLabels, "remove", false); err != nil {
 		return nil, nil, err
 	}
 
@@ -326,7 +331,7 @@ func (p *Policy) rewriteGmailLabelsGet(params map[string]interface{}, warnings [
 		return nil, nil, errors.New("params.label is required")
 	}
 	label = strings.TrimSpace(label)
-	if err := p.validateLabels([]string{label}); err != nil {
+	if err := p.validateLabels([]string{label}, p.Gmail.AllowedReadLabels, "read", true); err != nil {
 		return nil, nil, err
 	}
 	params["label"] = label
@@ -349,7 +354,10 @@ func (p *Policy) rewriteGmailLabelsModify(params map[string]interface{}, warning
 	if len(addLabels) == 0 && len(removeLabels) == 0 {
 		return nil, nil, errors.New("params.add or params.remove is required")
 	}
-	if err := p.validateLabels(append(addLabels, removeLabels...)); err != nil {
+	if err := p.validateLabels(addLabels, p.Gmail.AllowedAddLabels, "add", false); err != nil {
+		return nil, nil, err
+	}
+	if err := p.validateLabels(removeLabels, p.Gmail.AllowedRemoveLabels, "remove", false); err != nil {
 		return nil, nil, err
 	}
 
@@ -370,25 +378,37 @@ func (p *Policy) DraftSendRequired(params map[string]interface{}) bool {
 	return p.draftSendReason(params) != ""
 }
 
-func (p *Policy) validateLabels(labels []string) error {
-	if p == nil || p.Gmail == nil || len(p.Gmail.AllowedLabels) == 0 {
+func (p *Policy) validateLabels(labels []string, allowed []string, mode string, allowEmpty bool) error {
+	if len(labels) == 0 {
 		return nil
+	}
+	if p == nil || p.Gmail == nil {
+		return errors.New("gmail policy missing")
+	}
+	if len(allowed) == 0 {
+		if allowEmpty {
+			return nil
+		}
+		return fmt.Errorf("no labels allowed for %s", mode)
 	}
 	for _, label := range labels {
 		label = strings.TrimSpace(label)
 		if label == "" {
 			continue
 		}
-		if !p.isLabelAllowed(label) {
+		if !p.isLabelAllowed(label, allowed) {
 			return fmt.Errorf("label not allowed: %s", label)
 		}
 	}
 	return nil
 }
 
-func (p *Policy) isLabelAllowed(label string) bool {
-	if p == nil || p.Gmail == nil || len(p.Gmail.AllowedLabels) == 0 {
-		return true
+func (p *Policy) isLabelAllowed(label string, allowed []string) bool {
+	if p == nil || p.Gmail == nil {
+		return false
+	}
+	if len(allowed) == 0 {
+		return false
 	}
 	label = strings.TrimSpace(label)
 	if label == "" {
@@ -396,12 +416,12 @@ func (p *Policy) isLabelAllowed(label string) bool {
 	}
 	labelLower := strings.ToLower(label)
 	allowedSet := map[string]struct{}{}
-	for _, allowed := range p.Gmail.AllowedLabels {
-		allowed = strings.TrimSpace(allowed)
-		if allowed == "" {
+	for _, allowedLabel := range allowed {
+		allowedLabel = strings.TrimSpace(allowedLabel)
+		if allowedLabel == "" {
 			continue
 		}
-		allowedSet[strings.ToLower(allowed)] = struct{}{}
+		allowedSet[strings.ToLower(allowedLabel)] = struct{}{}
 	}
 	if _, ok := allowedSet[labelLower]; ok {
 		return true

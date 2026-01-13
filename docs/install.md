@@ -47,7 +47,13 @@ gogcli-sandbox-init --account you@gmail.com
 Override defaults (example):
 
 ```sh
-gogcli-sandbox-init --account you@gmail.com --label Label_123 --calendar primary --include-thread-get --max-calendar-days 14
+gogcli-sandbox-init --account you@gmail.com --read-label Label_123 --calendar primary --include-thread-get --max-calendar-days 14
+```
+
+Allow label modifications:
+
+```sh
+gogcli-sandbox-init --account you@gmail.com --add-label ProjectX --remove-label INBOX
 ```
 
 Generate a multi-account policy with a default account:
@@ -85,7 +91,9 @@ To enforce policy per account, use an `accounts` map in `policy.json` and set a 
     "cashwilliams@gmail.com": {
       "allowed_actions": ["policy.actions", "gmail.search", "calendar.list", "calendar.events"],
       "gmail": {
-        "allowed_labels": ["INBOX"],
+        "allowed_read_labels": ["INBOX"],
+        "allowed_add_labels": [],
+        "allowed_remove_labels": [],
         "allowed_senders": [],
         "allowed_send_recipients": [],
         "max_days": 7,
@@ -103,6 +111,11 @@ To enforce policy per account, use an `accounts` map in `policy.json` and set a 
   }
 }
 ```
+
+Notes:
+- `allowed_read_labels` controls which labels/messages can be read (search/get).
+- `allowed_add_labels` and `allowed_remove_labels` control label modifications.
+- To allow archiving without inbox access, set `allowed_remove_labels: ["INBOX"]` and omit `INBOX` from `allowed_read_labels`.
 
 When multiple accounts are configured, the client should pass `--account` (or set
 `GOGCLI_SANDBOX_ACCOUNT`). If omitted, the broker falls back to `default_account`,

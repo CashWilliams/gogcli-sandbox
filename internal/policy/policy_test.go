@@ -6,7 +6,7 @@ import (
 )
 
 func TestRewriteGmailQueryAddsNewerThan(t *testing.T) {
-	p := &Policy{AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{MaxDays: 7, AllowedLabels: []string{"Label_123"}}}
+	p := &Policy{AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{MaxDays: 7, AllowedReadLabels: []string{"Label_123"}}}
 	if err := p.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestRewriteGmailQueryAddsNewerThan(t *testing.T) {
 }
 
 func TestRewriteGmailQueryAllowsAnyLabel(t *testing.T) {
-	p := &Policy{AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	p := &Policy{AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedReadLabels: []string{"Label_123"}}}
 	if err := p.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRewriteGmailSendAllowlistDraftsUnknownRecipients(t *testing.T) {
 }
 
 func TestRewriteGmailLabelsGetAllowsMappedName(t *testing.T) {
-	p := &Policy{AllowedActions: []string{"gmail.labels.get"}, Gmail: &GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	p := &Policy{AllowedActions: []string{"gmail.labels.get"}, Gmail: &GmailPolicy{AllowedReadLabels: []string{"Label_123"}}}
 	if err := p.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestRewriteGmailLabelsGetAllowsMappedName(t *testing.T) {
 }
 
 func TestRewriteGmailLabelsModifyRejectsDisallowed(t *testing.T) {
-	p := &Policy{AllowedActions: []string{"gmail.labels.modify"}, Gmail: &GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	p := &Policy{AllowedActions: []string{"gmail.labels.modify"}, Gmail: &GmailPolicy{AllowedAddLabels: []string{"Label_123"}, AllowedRemoveLabels: []string{"Label_123"}}}
 	if err := p.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}

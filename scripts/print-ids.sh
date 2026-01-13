@@ -13,7 +13,7 @@ if ! command -v python >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Gmail label IDs (use the first column in policy.allowed_labels):"
+echo "Gmail label IDs (use the first column in policy.allowed_read_labels / allowed_add_labels / allowed_remove_labels):"
 printf "%-40s %s\n" "LABEL_ID" "LABEL_NAME"
 python - <<'PY'
 import json, subprocess, sys

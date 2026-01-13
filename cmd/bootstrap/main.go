@@ -35,7 +35,9 @@ type policy struct {
 }
 
 type gmailPolicy struct {
-	AllowedLabels         []string `json:"allowed_labels"`
+	AllowedReadLabels     []string `json:"allowed_read_labels"`
+	AllowedAddLabels      []string `json:"allowed_add_labels"`
+	AllowedRemoveLabels   []string `json:"allowed_remove_labels"`
 	AllowedSenders        []string `json:"allowed_senders"`
 	AllowedSendRecipients []string `json:"allowed_send_recipients"`
 	MaxDays               int      `json:"max_days"`
@@ -52,7 +54,9 @@ type calendarPolicy struct {
 }
 
 func main() {
-	var labels stringList
+	var readLabels stringList
+	var addLabels stringList
+	var removeLabels stringList
 	var calendars stringList
 	var senders stringList
 	var sendRecipients stringList
@@ -68,7 +72,10 @@ func main() {
 	var maxCalendarDays int
 	var account string
 
-	flag.Var(&labels, "label", "Allowed Gmail label ID (repeat or comma-separated). Default: INBOX")
+	flag.Var(&readLabels, "label", "Allowed Gmail read label ID/name (repeat or comma-separated). Default: INBOX")
+	flag.Var(&readLabels, "read-label", "Allowed Gmail read label ID/name (repeat or comma-separated). Default: INBOX")
+	flag.Var(&addLabels, "add-label", "Allowed Gmail label ID/name to add (repeat or comma-separated). Optional")
+	flag.Var(&removeLabels, "remove-label", "Allowed Gmail label ID/name to remove (repeat or comma-separated). Optional")
 	flag.Var(&calendars, "calendar", "Allowed calendar ID (repeat or comma-separated). Default: primary")
 	flag.Var(&senders, "sender", "Allowed sender domain (repeat or comma-separated). Optional")
 	flag.Var(&sendRecipients, "allow-send-recipient", "Allowed email address for direct send (repeat or comma-separated). Optional")
@@ -95,8 +102,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(labels) == 0 {
-		labels = append(labels, "INBOX")
+	if len(readLabels) == 0 {
+		readLabels = append(readLabels, "INBOX")
 	}
 	if len(calendars) == 0 {
 		calendars = append(calendars, "primary")
@@ -122,7 +129,9 @@ func main() {
 	pol := policy{
 		AllowedActions: actions,
 		Gmail: &gmailPolicy{
-			AllowedLabels:         labels,
+			AllowedReadLabels:     readLabels,
+			AllowedAddLabels:      addLabels,
+			AllowedRemoveLabels:   removeLabels,
 			AllowedSenders:        senders,
 			AllowedSendRecipients: sendRecipients,
 			MaxDays:               maxGmailDays,

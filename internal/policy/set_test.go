@@ -14,7 +14,7 @@ func TestLoadSetAccountsResolve(t *testing.T) {
   "accounts": {
     "user@example.com": {
       "allowed_actions": ["gmail.search"],
-      "gmail": { "allowed_labels": ["INBOX"] }
+      "gmail": { "allowed_read_labels": ["INBOX"] }
     }
   }
 }`)
@@ -40,8 +40,8 @@ func TestLoadSetAccountsResolve(t *testing.T) {
 
 func TestResolveRequiresAccount(t *testing.T) {
 	set := &PolicySet{Accounts: map[string]*Policy{
-		"a@example.com": {AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedLabels: []string{"INBOX"}}},
-		"b@example.com": {AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedLabels: []string{"INBOX"}}},
+		"a@example.com": {AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedReadLabels: []string{"INBOX"}}},
+		"b@example.com": {AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedReadLabels: []string{"INBOX"}}},
 	}}
 	for _, pol := range set.Accounts {
 		if err := pol.Validate(); err != nil {
@@ -55,7 +55,7 @@ func TestResolveRequiresAccount(t *testing.T) {
 }
 
 func TestResolveSingleAccountFallback(t *testing.T) {
-	set := &PolicySet{Accounts: map[string]*Policy{"a@example.com": {AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedLabels: []string{"INBOX"}}}}}
+	set := &PolicySet{Accounts: map[string]*Policy{"a@example.com": {AllowedActions: []string{"gmail.search"}, Gmail: &GmailPolicy{AllowedReadLabels: []string{"INBOX"}}}}}
 	if err := set.Accounts["a@example.com"].Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}

@@ -34,7 +34,7 @@ func TestRedactDropsBodyAndLinks(t *testing.T) {
 }
 
 func TestRedactEnforcesAllowedLabelIDsWhenPresent(t *testing.T) {
-	pol := &policy.Policy{AllowedActions: []string{"gmail.get"}, Gmail: &policy.GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	pol := &policy.Policy{AllowedActions: []string{"gmail.get"}, Gmail: &policy.GmailPolicy{AllowedReadLabels: []string{"Label_123"}}}
 	if err := pol.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRedactEnforcesAllowedLabelIDsWhenPresent(t *testing.T) {
 }
 
 func TestRedactFiltersSearchResultsByLabel(t *testing.T) {
-	pol := &policy.Policy{AllowedActions: []string{"gmail.search"}, Gmail: &policy.GmailPolicy{AllowedLabels: []string{"CATEGORY_UPDATES"}}}
+	pol := &policy.Policy{AllowedActions: []string{"gmail.search"}, Gmail: &policy.GmailPolicy{AllowedReadLabels: []string{"CATEGORY_UPDATES"}}}
 	if err := pol.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestRedactFiltersSearchResultsByLabel(t *testing.T) {
 }
 
 func TestRedactFiltersSearchResultsByLabelIDMapping(t *testing.T) {
-	pol := &policy.Policy{AllowedActions: []string{"gmail.search"}, Gmail: &policy.GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	pol := &policy.Policy{AllowedActions: []string{"gmail.search"}, Gmail: &policy.GmailPolicy{AllowedReadLabels: []string{"Label_123"}}}
 	if err := pol.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestRedactFiltersSearchResultsByLabelIDMapping(t *testing.T) {
 }
 
 func TestRedactDraftIgnoresLabelAllowlist(t *testing.T) {
-	pol := &policy.Policy{AllowedActions: []string{"gmail.send"}, Gmail: &policy.GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	pol := &policy.Policy{AllowedActions: []string{"gmail.send"}, Gmail: &policy.GmailPolicy{AllowedReadLabels: []string{"Label_123"}}}
 	if err := pol.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestRedactFiltersCalendarList(t *testing.T) {
 }
 
 func TestRedactFiltersLabelsList(t *testing.T) {
-	pol := &policy.Policy{AllowedActions: []string{"gmail.labels.list"}, Gmail: &policy.GmailPolicy{AllowedLabels: []string{"Label_123"}}}
+	pol := &policy.Policy{AllowedActions: []string{"gmail.labels.list"}, Gmail: &policy.GmailPolicy{AllowedReadLabels: []string{"Label_123"}}}
 	if err := pol.Validate(); err != nil {
 		t.Fatalf("validate: %v", err)
 	}

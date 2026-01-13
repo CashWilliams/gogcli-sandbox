@@ -74,8 +74,8 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 		b.logDenied("action_denied", fields, start)
 		return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("forbidden", "action not allowed", "")}
 	}
-	if req.Action == "gmail.search" || req.Action == "gmail.thread.list" || req.Action == "gmail.labels.get" || req.Action == "gmail.labels.modify" || req.Action == "gmail.thread.modify" {
-		if pol != nil && pol.Gmail != nil && len(pol.Gmail.AllowedLabels) > 0 {
+	if req.Action == "gmail.search" || req.Action == "gmail.thread.list" || req.Action == "gmail.labels.get" || req.Action == "gmail.labels.modify" || req.Action == "gmail.thread.modify" || req.Action == "gmail.labels.list" {
+		if pol != nil && pol.Gmail != nil && hasAnyLabelConstraints(pol.Gmail) {
 			if err := b.ensureLabelMap(ctx, account, pol); err != nil {
 				b.logError("label_map_error", fields, start)
 				return &types.Response{ID: req.ID, Ok: false, Error: types.NewError("upstream_error", "failed to resolve label ids", "")}
@@ -287,4 +287,11 @@ func (b *Broker) resolvePolicy(account string) (*policy.Policy, string, error) {
 		return nil, "", errors.New("policy is required")
 	}
 	return b.Policies.Resolve(account, b.DefaultAccount)
+}
+
+func hasAnyLabelConstraints(gmail *policy.GmailPolicy) bool {
+	if gmail == nil {
+		return false
+	}
+	return len(gmail.AllowedReadLabels) > 0 || len(gmail.AllowedAddLabels) > 0 || len(gmail.AllowedRemoveLabels) > 0
 }
