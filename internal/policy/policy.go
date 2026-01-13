@@ -141,6 +141,11 @@ func (p *Policy) ValidateAndRewrite(ctx context.Context, action string, params m
 		return p.rewriteCalendarEvents(ctx, params, warnings)
 	case "calendar.freebusy":
 		return p.rewriteCalendarFreeBusy(ctx, params, warnings)
+	case "policy.actions":
+		if len(params) > 0 {
+			return nil, nil, errors.New("params must be empty")
+		}
+		return params, warnings, nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported action: %s", action)
 	}

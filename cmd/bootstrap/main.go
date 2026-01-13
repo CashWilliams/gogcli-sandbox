@@ -103,6 +103,7 @@ func main() {
 	}
 
 	actions := []string{
+		"policy.actions",
 		"gmail.search",
 		"gmail.thread.list",
 		"gmail.get",

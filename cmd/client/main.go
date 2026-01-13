@@ -100,6 +100,8 @@ func parseCommand(cmd string, args []string) (string, map[string]interface{}, er
 		return parseGmailGet(args)
 	case "gmail.send":
 		return parseGmailSend(args)
+	case "policy.actions":
+		return parsePolicyActions(args)
 	case "calendar.list":
 		return parseCalendarList(args)
 	case "calendar.events":
@@ -114,6 +116,9 @@ func parseCommand(cmd string, args []string) (string, map[string]interface{}, er
 		return "", nil, errHelp
 	case "help.calendar", "calendar.help":
 		printUsage("calendar")
+		return "", nil, errHelp
+	case "help.policy", "policy.help":
+		printUsage("policy")
 		return "", nil, errHelp
 	default:
 		return "", nil, fmt.Errorf("unknown command: %s", cmd)
@@ -387,6 +392,18 @@ func parseCalendarFreebusy(args []string) (string, map[string]interface{}, error
 	return "calendar.freebusy", params, nil
 }
 
+func parsePolicyActions(args []string) (string, map[string]interface{}, error) {
+	fs := flag.NewFlagSet("policy.actions", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return "", nil, err
+	}
+	if fs.NArg() > 0 {
+		return "", nil, fmt.Errorf("policy.actions does not accept arguments")
+	}
+	return "policy.actions", map[string]interface{}{}, nil
+}
+
 func doRequest(cfg config, action string, params map[string]interface{}) (*types.Response, []byte, error) {
 	reqPayload := &types.Request{ID: cfg.ID, Action: action, Account: cfg.Account, Params: params}
 	body, err := json.Marshal(reqPayload)
@@ -482,6 +499,10 @@ func printUsage(section string) {
 		fmt.Println("  calendar.events     List events from a calendar")
 		fmt.Println("  calendar.freebusy   Get free/busy blocks")
 		return
+	case "policy":
+		fmt.Println("policy commands:")
+		fmt.Println("  policy.actions      List allowed actions")
+		return
 	}
 
 	fmt.Println("Usage:")
@@ -502,9 +523,11 @@ func printUsage(section string) {
 	fmt.Println("  calendar.list")
 	fmt.Println("  calendar.events")
 	fmt.Println("  calendar.freebusy")
+	fmt.Println("  policy.actions")
 	fmt.Println("")
 	fmt.Println("Help:")
 	fmt.Println("  gogcli-sandbox-client help")
 	fmt.Println("  gogcli-sandbox-client help.gmail")
 	fmt.Println("  gogcli-sandbox-client help.calendar")
+	fmt.Println("  gogcli-sandbox-client help.policy")
 }

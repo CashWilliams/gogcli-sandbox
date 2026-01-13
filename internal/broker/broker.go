@@ -94,6 +94,20 @@ func (b *Broker) Handle(ctx context.Context, req *types.Request) *types.Response
 		}
 	}
 
+	if req.Action == "policy.actions" {
+		actions := append([]string{}, pol.AllowedActions...)
+		sort.Strings(actions)
+		resp := &types.Response{ID: req.ID, Ok: true, Data: map[string]any{
+			"account": account,
+			"actions": actions,
+		}}
+		if len(warnings) > 0 {
+			resp.Warnings = warnings
+		}
+		b.logAllowed("request_ok", fields, start)
+		return resp
+	}
+
 	runner := b.RunnerProvider.RunnerFor(account)
 	data, err := runner.Run(ctx, runAction, params)
 	if err != nil {

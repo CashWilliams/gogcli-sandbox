@@ -83,7 +83,7 @@ To enforce policy per account, use an `accounts` map in `policy.json` and set a 
   "default_account": "cashwilliams@gmail.com",
   "accounts": {
     "cashwilliams@gmail.com": {
-      "allowed_actions": ["gmail.search", "calendar.list", "calendar.events"],
+      "allowed_actions": ["policy.actions", "gmail.search", "calendar.list", "calendar.events"],
       "gmail": {
         "allowed_labels": ["INBOX"],
         "allowed_senders": [],
@@ -209,6 +209,7 @@ sudo systemctl start gogcli-sandbox.service
 
 ```sh
 gogcli-sandbox-client help
+gogcli-sandbox-client policy.actions
 gogcli-sandbox-client gmail.search --query "label:INBOX newer_than:7d" --max 10
 gogcli-sandbox-client calendar.events --calendar-id primary --days 7
 ```
